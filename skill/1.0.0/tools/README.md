@@ -96,4 +96,4 @@ routes:
 
 ## License
 
-CC0 - public domain. Use freely.
+MIT (see repo `LICENSE`). Use freely.

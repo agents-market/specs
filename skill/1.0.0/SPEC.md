@@ -5,7 +5,7 @@
 
 ## Status
 
-v1.0 (draft, 2026-09-12). Open for community feedback. License: CC0 (public domain dedication).
+v1.0 (draft, 2026-09-12). Open for community feedback. License: MIT (see repo `LICENSE`).
 
 ## Why this format
 
@@ -198,8 +198,8 @@ Tools parsing v1.0 MUST accept v1.x files (forward compat for additive fields).
 
 ## Discussion
 
-GitHub Discussions: https://github.com/agents-market/skill-md-spec/discussions (planned)
+GitHub Discussions: https://github.com/agents-market/spec/discussions (planned)
 
 ## License
 
-CC0 1.0 Universal (public domain dedication). Anyone may implement, extend, or fork.
+MIT (see repo `LICENSE`). Anyone may implement, extend, or fork.

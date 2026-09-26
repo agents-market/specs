@@ -1,0 +1,66 @@
+# tts-synthesizer.yaml — M2 example pipeline
+#
+# Demonstrates the tts_synthesize tool skill (M2, 2026-09-25).
+# Converts text to speech audio via OpenAI TTS. Multiple voice options.
+# Optional loop pattern: regenerate with different voice if first fails
+# validation (M6.2 pattern).
+#
+# Without OPENAI_API_KEY + tool flag enabled, tts_synthesize returns
+# deterministic mock data (zero cost).
+#
+# Activation (full real-mode):
+#   1. OPENAI_API_KEY in wrangler.toml secrets
+#   2. bash .scripts/activate-m2.sh <OPENAI_KEY>
+
+name: tts-synthesizer
+version: 1.0.0
+description: |
+  Converts text to speech audio via OpenAI TTS. Demonstrates M2
+  tts_synthesize tool skill. Multiple voice options. Stores audio
+  metadata in pipeline memory (audio bytes themselves go to R2).
+author_id: agents-market
+license: MIT
+
+memory:
+  partitions:
+    - name: tts_outputs
+      scope: pipeline
+      ttl_seconds: 86400
+
+inputs:
+  text:
+    type: string
+    required: true
+    description: Text to synthesize (max 5000 chars)
+  voice:
+    type: string
+    default: "alloy"
+    enum: ["alloy", "echo", "fable", "onyx", "nova", "shimmer"]
+    description: TTS voice
+  format:
+    type: string
+    default: "mp3"
+    enum: ["mp3", "wav", "opus"]
+    description: Audio format
+
+stages:
+  - id: synthesize
+    uses: tool:tts_synthesize
+    inputs:
+      text: "{{text}}"
+      voice: "{{voice}}"
+      format: "{{format}}"
+
+  - id: store_metadata
+    uses: tool:memory_store
+    inputs:
+      pipeline_id: tts-synthesizer
+      partition: tts_outputs
+      key: "tts:{{voice}}:{{format}}"
+      value:
+        text_length: "{{text}}"
+        voice: "{{voice}}"
+        format: "{{format}}"
+        bytes: "{{stages.synthesize.outputs}}"
+        created_at: "{{created_at}}"
+      ttl_seconds: 86400

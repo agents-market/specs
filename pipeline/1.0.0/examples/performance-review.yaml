@@ -1,0 +1,207 @@
+# name: performance-review
+# version: 1.0.0
+# description: AI-powered performance review for code diffs. Identifies algorithmic complexity issues (O(n²) loops, N+1 queries), memory allocations, hot path inefficiencies, blocking operations, and missing indexes. Outputs structured findings with severity + line + bottleneck + fix suggestion + estimated impact. Vertical wedge expansion: performance review as paid AI agent service at $0.001/call.
+# price_usdc: 1000      # 0.001 USDC per invocation (~$1 per 1000 reviews)
+# tags: ["performance", "code-review", "vertical-wedge"]
+# public_preview: AI performance review of code diffs. Structured findings (severity + line + bottleneck + fix + estimated impact), aggregate perf score 0-10, prioritized optimizations. $0.001/call.
+#
+# Reference example for pitch deck / customer demo. NOT a deployment — caller MUST
+# supply executor_url via CLI flag or server routing config (runtime concept).
+#
+# Input contract:
+#   - code_diff (string, required, 1..50000 chars) — Git diff or unified patch text
+#   - language (enum typescript/javascript/python/rust/go/solidity/generic, default generic)
+#   - focus_area (enum latency/memory/throughput/all, default latency)
+#   - severity_threshold (enum low/medium/high/critical, default medium)
+#
+# Output schema:
+#   - findings[] — array of {severity, line, bottleneck, description, fix_suggestion, estimated_impact, confidence}
+#   - summary — {total_findings, critical/high/medium/low_count, perf_score 0-10, estimated_speedup}
+#   - recommendations[] — ≤5 prioritized optimization strings (≤200 chars each)
+#   - markdown_report — Markdown summary for PR-comment-style output (≤50 lines)
+name: performance-review
+version: 1.0.0
+description: AI performance review of code diffs — identifies algorithmic complexity issues, memory allocations, hot path inefficiencies, and missing indexes. Structured findings with severity + bottleneck + fix + estimated impact. Vertical wedge expansion path — performance review as paid AI agent service.
+author_id: agentsmarket-team
+license: MIT
+
+inputs:
+  code_diff:
+    type: string
+    required: true
+    description: "Git diff or unified patch text (1..50000 chars). Standard hunk header format `@@ -a,b +c,d @@`."
+    min_length: 1
+    max_length: 50000
+  language:
+    type: string
+    required: false
+    default: generic
+    enum: [typescript, javascript, python, rust, go, solidity, generic]
+    description: "Primary language in the diff (helps reviewer pick language-specific patterns; default: generic)."
+  focus_area:
+    type: string
+    required: false
+    default: latency
+    enum: [latency, memory, throughput, all]
+    description: "What the reviewer should prioritize (default: latency)."
+  severity_threshold:
+    type: string
+    required: false
+    default: medium
+    enum: [low, medium, high, critical]
+    description: "Minimum severity to include in findings array (filters out noise; default: medium)."
+
+outputs:
+  findings:
+    format: structured_json
+    description: "Array of performance findings: {severity, line, bottleneck, description, fix_suggestion, estimated_impact, confidence}."
+    fields: [findings]
+  summary:
+    format: structured_json
+    description: "Aggregate counts + perf score (0-10) + estimated speedup: {total_findings, critical_count, high_count, medium_count, low_count, perf_score, estimated_speedup}."
+    fields: [summary]
+  recommendations:
+    format: structured_json
+    description: "Array of ≤5 prioritized optimization strings (≤200 chars each, ordered by impact)."
+    fields: [recommendations]
+  markdown_report:
+    format: structured_json
+    description: "Markdown summary suitable for PR comment (≤50 lines)."
+    fields: [markdown_report]
+
+defaults:
+  model: MiniMax-M3
+
+stages:
+  - id: profile_diff
+    provider: minimax
+    model: MiniMax-M2.7
+    system: "You are a code analysis profiler. Quickly identify the hot paths, loops, allocations, and I/O patterns in a code diff. Be precise — false positives waste review time."
+    prompt: |
+      Profile the following {{language}} diff for performance hotspots.
+
+      For each region emit a JSON object with:
+        - `region` (string — function name or block identifier)
+        - `line_range` (string — e.g., "42-67")
+        - `pattern` (loop | allocation | i/o | sort | map | regex | recursion | other)
+        - `complexity_hint` (string — e.g., "O(n²)", "O(n log n)", "O(n)")
+
+      Return JSON:
+      {
+        "regions": [{"region": "...", "line_range": "...", "pattern": "...", "complexity_hint": "..."}, ...],
+        "stats": { "regions_count": n, "language": "{{language}}" }
+      }
+
+      Reply with valid JSON only. No prose, no markdown fences.
+
+      Diff:
+      ```
+      $input.code_diff
+      ```
+    output_format: structured_json
+    fields: [regions, stats]
+
+  - id: analyze_perf
+    provider: minimax
+    model: MiniMax-M3
+    depends_on: [profile_diff]
+    system: "You are a senior performance engineer. For each hot region, identify the bottleneck: algorithmic complexity (O(n²) vs O(n)), memory allocations, blocking I/O, N+1 queries, missing indexes, inefficient string concatenation, regex backtracking. Provide: severity (critical/high/medium/low), short description (≤200 chars), fix suggestion (≤300 chars), estimated_impact (string — e.g., '10x faster on 1M items', '50% memory reduction', 'latency from 500ms → 5ms'), and confidence (0.0-1.0)."
+    prompt: |
+      Analyze the following hot regions for performance bottlenecks.
+
+      Hot regions (from profile):
+      $stages.profile_diff.output
+
+      Severity floor: {{severity_threshold}} — drop findings below this.
+
+      Focus area: {{focus_area}} — prioritize accordingly.
+
+      For EACH problematic region, emit a JSON object with:
+        - `region` (string — from input)
+        - `line` (integer — first line of issue)
+        - `severity` (critical | high | medium | low)
+        - `bottleneck` (string — short label, e.g., "O(n²) loop", "N+1 query", "regex backtracking", "missing index", "blocking I/O")
+        - `description` (string ≤200 chars)
+        - `fix_suggestion` (string ≤300 chars — concrete code change)
+        - `estimated_impact` (string — measurable improvement claim)
+        - `confidence` (float 0.0-1.0)
+
+      Return JSON:
+      {
+        "findings": [...],
+        "summary": {
+          "total_findings": int,
+          "regions_analyzed": int
+        }
+      }
+
+      Reply with valid JSON only. No prose, no markdown fences.
+    output_format: structured_json
+    fields: [findings, summary]
+
+  - id: aggregate_perf
+    provider: minimax
+    model: MiniMax-M3
+    depends_on: [analyze_perf]
+    system: "You compute performance metrics and prioritize optimizations. Use a 0-10 perf_score scale where 10 = no optimizations possible (already optimal) and 0 = severe regressions introduced. Order recommendations by estimated impact (biggest wins first)."
+    prompt: |
+      Compute the final performance review report.
+
+      Inputs to merge:
+        - Profile: $stages.profile_diff.output
+        - Analyze: $stages.analyze_perf.output
+
+      Output a JSON object with EXACTLY these four fields:
+        - `summary`: {
+            "total_findings": int,
+            "critical_count": int,
+            "high_count": int,
+            "medium_count": int,
+            "low_count": int,
+            "perf_score": float (0-10),
+            "estimated_speedup": string (e.g., "10x on 1M items", "50% memory reduction", "latency from 500ms → 5ms")
+          }
+        - `recommendations`: array of ≤5 prioritized optimization strings (≤200 chars each, ordered by impact)
+        - `markdown_report`: Markdown summary suitable for a PR comment (≤50 lines, structure: Summary, Critical/High/Medium sections, Top 5 optimizations with estimated impact)
+        - `findings`: array of {region, line, severity, bottleneck, description, fix_suggestion, estimated_impact, confidence} — same shape as stage 2, included for convenience
+
+      Reply with valid JSON only. No prose, no markdown fences.
+    output_format: structured_json
+    fields: [summary, recommendations, markdown_report, findings]
+    output_schema:
+      type: object
+      required: [summary, recommendations, markdown_report, findings]
+      additionalProperties: false
+      properties:
+        summary:
+          type: object
+          required: [total_findings, critical_count, high_count, medium_count, low_count, perf_score, estimated_speedup]
+          properties:
+            total_findings: { type: integer }
+            critical_count: { type: integer }
+            high_count: { type: integer }
+            medium_count: { type: integer }
+            low_count: { type: integer }
+            perf_score: { type: number }
+            estimated_speedup: { type: string }
+        recommendations:
+          type: array
+          maxItems: 5
+          items: { type: string, maxLength: 200 }
+        markdown_report:
+          type: string
+          maxLength: 8000
+        findings:
+          type: array
+          items:
+            type: object
+            properties:
+              region: { type: string }
+              line: { type: integer }
+              severity: { type: string, enum: [critical, high, medium, low] }
+              bottleneck: { type: string }
+              description: { type: string }
+              fix_suggestion: { type: string }
+              estimated_impact: { type: string }
+              confidence: { type: number }
+    output_retry: single

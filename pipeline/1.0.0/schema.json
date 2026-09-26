@@ -1,0 +1,324 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/agents-market/spec/blob/main/pipeline/1.0.0/schema.json",
+  "title": "Pipeline",
+  "description": "Vendor-neutral pipeline format v1.0.0. See PIPELINE_SPEC.md for semantics.",
+  "type": "object",
+  "required": ["name", "version", "author_id", "stages"],
+  "additionalProperties": true,
+  "properties": {
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z0-9_-]+$",
+      "description": "Pipeline identifier."
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(-[0-9A-Za-z.-]+)?(\\+[0-9A-Za-z.-]+)?$",
+      "description": "Semver pipeline version."
+    },
+    "description": { "type": "string" },
+    "author_id": { "type": "string", "minLength": 1 },
+    "author_name": { "type": "string" },
+    "price_usdc": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "One-time license fee in micro-USDC. Omitted or 0 = free to install."
+    },
+    "call_price_usdc": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Per-invocation fee in micro-USDC. Default: price_usdc / 100."
+    },
+    "preferred_model": {
+      "type": "string",
+      "description": "Hint for stages that omit model. Hint only, not enforced."
+    },
+    "license": { "type": "string", "default": "Proprietary" },
+    "tags": { "type": "array", "items": { "type": "string" } },
+    "is_private": { "type": "boolean" },
+    "concurrency": { "type": "integer", "minimum": 1 },
+    "inputs": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/definitions/inputDescriptor" }
+    },
+    "output": { "$ref": "#/definitions/outputBlock" },
+    "quality": {
+      "type": "object",
+      "properties": {
+        "min_rating": { "type": "number", "minimum": 1, "maximum": 5 },
+        "refund_window": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "limits": {
+      "type": "object",
+      "properties": {
+        "total_tokens": { "type": "integer", "minimum": 1 },
+        "total_cost_usdc": { "type": "number", "minimum": 0 },
+        "timeout_seconds": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": true
+    },
+    "cost": {
+      "type": "object",
+      "properties": {
+        "max_per_run_usdc": {
+          "type": "number",
+          "minimum": 0,
+          "default": 1.0,
+          "description": "Cap on estimated per-run cost in USDC. 0 = unlimited."
+        },
+        "on_exceed": {
+          "type": "string",
+          "enum": ["fail", "warn"],
+          "default": "fail"
+        }
+      },
+      "additionalProperties": false
+    },
+    "memory": {
+      "type": "object",
+      "required": ["partitions"],
+      "properties": {
+        "partitions": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["name"],
+            "properties": {
+              "name": { "type": "string", "maxLength": 64 },
+              "scope": {
+                "type": "string",
+                "enum": ["pipeline", "stage"],
+                "default": "pipeline"
+              },
+              "ttl_seconds": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 2592000,
+                "default": 86400
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "stages": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/definitions/stage" }
+    }
+  },
+  "definitions": {
+    "inputDescriptor": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["string", "number", "integer", "boolean", "array", "object"]
+        },
+        "required": { "type": "boolean", "default": false },
+        "default": true,
+        "enum": { "type": "array" },
+        "description": { "type": "string" },
+        "min_length": { "type": "integer", "minimum": 0 },
+        "max_length": { "type": "integer", "minimum": 0 },
+        "minimum": { "type": "number" },
+        "maximum": { "type": "number" }
+      },
+      "additionalProperties": true
+    },
+    "outputBlock": {
+      "type": "object",
+      "properties": {
+        "format": {
+          "type": "string",
+          "enum": ["text", "json", "zip", "files"],
+          "default": "text"
+        },
+        "files": { "type": "array", "items": { "type": "string" } },
+        "delivery": {
+          "type": "string",
+          "enum": ["inline", "signed_url"],
+          "default": "inline"
+        },
+        "expires_in": {
+          "type": "integer",
+          "minimum": 60,
+          "maximum": 604800,
+          "default": 86400
+        }
+      },
+      "additionalProperties": false
+    },
+    "stage": {
+      "type": "object",
+      "required": ["id"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "depends_on": { "type": "array", "items": { "type": "string" } },
+        "input": { "type": "object" },
+        "system": { "type": "string" },
+        "provider": { "type": "string" },
+        "model": { "type": "string" },
+        "prompt": { "type": "string" },
+        "messages": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["role", "content"],
+            "properties": {
+              "role": { "type": "string" },
+              "content": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "required": ["type"],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "enum": ["text", "image_url", "audio_url", "video_url"]
+                    },
+                    "text": { "type": "string" },
+                    "image_url": {
+                      "type": "object",
+                      "properties": { "url": { "type": "string" } }
+                    },
+                    "audio_url": {
+                      "type": "object",
+                      "properties": { "url": { "type": "string" } }
+                    },
+                    "video_url": {
+                      "type": "object",
+                      "properties": { "url": { "type": "string" } }
+                    }
+                  },
+                  "additionalProperties": true
+                }
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "uses": {
+          "anyOf": [
+            { "type": "string" },
+            { "type": "array", "items": { "type": "string" } }
+          ]
+        },
+        "uses_parallel": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "uses": { "type": "string" },
+              "input": { "type": "object" }
+            },
+            "additionalProperties": true
+          }
+        },
+        "loop": {
+          "type": "object",
+          "required": ["body"],
+          "properties": {
+            "max_iterations": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10,
+              "default": 3
+            },
+            "exit_when": { "type": "string" },
+            "body": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "$ref": "#/definitions/stage" }
+            }
+          },
+          "additionalProperties": false
+        },
+        "shell": {
+          "anyOf": [
+            { "type": "string" },
+            {
+              "type": "object",
+              "required": ["cmd"],
+              "properties": {
+                "cmd": { "type": "string" },
+                "args": { "type": "array", "items": { "type": "string" } },
+                "cwd": { "type": "string" },
+                "timeout_ms": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 600000,
+                  "default": 30000
+                }
+              },
+              "additionalProperties": false
+            }
+          ]
+        },
+        "output_format": {
+          "type": "string",
+          "enum": ["text", "structured_json", "code", "markdown"],
+          "default": "text"
+        },
+        "fields": { "type": "array", "items": { "type": "string" } },
+        "output_schema": { "$ref": "output_schema.json" },
+        "output_retry": {
+          "type": "string",
+          "enum": ["none", "single", "loop"],
+          "default": "none"
+        },
+        "retry": {
+          "type": "object",
+          "properties": {
+            "attempts": { "type": "integer", "minimum": 1 },
+            "backoff": { "type": "string" },
+            "retryable_status": {
+              "type": "array",
+              "items": { "type": "integer" }
+            }
+          },
+          "additionalProperties": true
+        },
+        "run_if": { "type": "string" },
+        "when": { "type": "object" },
+        "checkpoint": {
+          "type": "object",
+          "properties": {
+            "on": { "type": "string" },
+            "storage": {
+              "type": "object",
+              "properties": {
+                "type": { "type": "string" },
+                "path": { "type": "string" }
+              },
+              "additionalProperties": true
+            },
+            "retention": { "type": "string" }
+          },
+          "additionalProperties": true
+        },
+        "parallel": {
+          "type": "object",
+          "properties": {
+            "of": { "type": "string" },
+            "max_concurrent": { "type": "integer", "minimum": 1 },
+            "body": { "type": "object" }
+          },
+          "additionalProperties": true
+        },
+        "mcp_servers": { "type": "array", "items": { "type": "string" } },
+        "mcp_tools": { "type": "array", "items": { "type": "string" } },
+        "working_dir": { "type": "string" }
+      },
+      "additionalProperties": true
+    }
+  }
+}

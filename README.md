@@ -1,94 +1,62 @@
-# SKILL.md Specification
+# agents-market/spec
 
-> A vendor-neutral format for describing AI-agent-callable skills (paid or free).
+> Vendor-neutral, public, versioned format specs for the AI-agent skill/pipeline ecosystem.
+> One repo, three specs — any marketplace or runner can implement them.
 
-## What is this?
+## Specs
 
-SKILL.md is a single Markdown file format that describes one AI skill — its inputs, outputs, pricing, author, and behavior. Any marketplace or tool can implement this spec and immediately onboard the same catalog of skills.
+| Spec | Path | What |
+|------|------|------|
+| **SKILL.md** | [`skill/1.0.0/`](skill/1.0.0/SPEC.md) | One file, one skill: inputs, outputs, pricing, author, behavior. |
+| **Pipeline** | [`pipeline/1.0.0/`](pipeline/1.0.0/PIPELINE_SPEC.md) | Multi-stage workflows: DAG, skills, conditions, validation, composition. |
+| **MCP tools** | [`mcp/1.0.0/`](mcp/1.0.0/MCP_TOOLS.md) | 22-tool surface for discover → invoke → manage (skills, pipelines, wallet). |
 
-## Why this format?
+Each spec is versioned independently (`<spec>/<semver>/`). v1.0.0 of each is
+frozen: additive changes ship as v1.x, breaking changes as v2.0.
 
-AI agents need a way to discover, understand, and invoke skills. Today each marketplace invents its own format:
+## Layout
 
-- skills.sh: minimal markdown with title/description
-- HuggingFace Spaces: README + metadata
-- OpenAI GPTs: YAML config + system prompt
-- MCP servers: `mcp.json` schema
-
-SKILL.md is the unified format. **One file, one skill, any marketplace.**
-
-## Quick example
-
-```markdown
----
-name: stripe-create-payment-intent
-description: Create a Stripe payment intent for one-time or recurring payments
-version: 1.0.0
-author_name: Acme Payments
-author_id: ed25519:7xK9pQ2vR3nL8mN1bV6cF4gH5jK8lM9nB2vC3xZ
-author_contact: support@acme-payments.example
-price_usdt: 1000
-is_free: false
-tags: [stripe, payments, fintech]
-public_preview: |
-  Creates a Stripe PaymentIntent given amount + currency.
-runtime: any
-openapi_compatible: true
-scan_score: 95
----
-
-# stripe-create-payment-intent
-
-## Description
-Wraps Stripe's `POST /v1/payment_intents` endpoint.
-
-## Inputs
-```json
-{ "amount": 2000, "currency": "usd" }
+```
+spec/
+├── README.md                  ← you are here
+├── LICENSE (MIT)
+├── CONTRIBUTING.md
+├── CHANGELOG.md
+├── skill/1.0.0/
+│   ├── SPEC.md                ← SKILL.md format definition
+│   ├── examples/              ← conforming SKILL.md examples
+│   └── tools/                 ← reference converters (OpenAPI → SKILL.md)
+├── pipeline/1.0.0/
+│   ├── PIPELINE_SPEC.md       ← pipeline format core (~750 lines)
+│   ├── schema.json            ← pipeline YAML JSON Schema (draft-07)
+│   ├── output_schema.json     ← output_schema subset meta-schema (draft-07)
+│   ├── examples/              ← 5 representative pipeline YAMLs (schema-validated)
+│   └── conformance-tests/     ← runner conformance notes
+└── mcp/1.0.0/
+    ├── MCP_TOOLS.md           ← 22-tool index + conformance notes
+    └── README.md
 ```
 
-## Outputs
-```json
-{
-  "id": "pi_...",
-  "client_secret": "pi_..._secret_...",
-  "amount": 2000,
-  "currency": "usd",
-  "status": "requires_payment_method"
-}
-```
+## Quick links
 
-## Pricing
-$0.001 USDC per call (1000 μUSDC).
-```
+- Pipeline format: [`pipeline/1.0.0/PIPELINE_SPEC.md`](pipeline/1.0.0/PIPELINE_SPEC.md)
+- Pipeline JSON Schema: [`pipeline/1.0.0/schema.json`](pipeline/1.0.0/schema.json)
+- Output-schema subset: [`pipeline/1.0.0/output_schema.json`](pipeline/1.0.0/output_schema.json)
+- SKILL.md format: [`skill/1.0.0/SPEC.md`](skill/1.0.0/SPEC.md)
+- MCP tool index: [`mcp/1.0.0/MCP_TOOLS.md`](mcp/1.0.0/MCP_TOOLS.md)
 
-## Spec version
+## Versioning
 
-**v1.0** (draft, 2026-09-12). See [SPEC.md](SPEC.md) for the full format definition.
-
-## Status
-
-- **v1.0**: draft, open for community feedback
-- License: CC0 1.0 (public domain dedication)
-
-## Adoption
-
-| Tool | Status |
-|------|--------|
-| agentsmarket.world | ✅ Full support (CLI + MCP) |
-| OpenAPI → SKILL.md converter | ✅ Implemented |
-| MCP mcp.json → SKILL.md converter | 📋 Planned |
-| HuggingFace Spaces → SKILL.md | 📋 Planned |
-| OpenAI GPT config → SKILL.md | 📋 Planned |
+- `1.0.0` (2026-09-26) — initial extraction: pipeline format core +
+  schemas + examples, SKILL.md v1.0 placement, MCP 22-tool index.
+- See [`CHANGELOG.md`](CHANGELOG.md) for details.
 
 ## Contributing
 
-We welcome PRs to SPEC.md. Please open an issue first to discuss substantial changes.
-
-See [CONTRIBUTING.md](CONTRIBUTING.md).
+Single-vendor governance for now (see [`CONTRIBUTING.md`](CONTRIBUTING.md)):
+issues and small PRs welcome; spec direction is set by the maintainer and
+may evolve toward shared governance as adoption grows.
 
 ## License
 
-CC0 1.0 Universal — see [LICENSE](LICENSE).
-
-Anyone may implement, extend, or fork without attribution.
+MIT — see [`LICENSE`](LICENSE).
